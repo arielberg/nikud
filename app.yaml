@@ -1,0 +1,5 @@
+runtime: python37
+api_version: 1
+
+env_variables:
+  BUCKET_NAME: "example-gcs-bucke"

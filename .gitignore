@@ -1,0 +1,6 @@
+/model/*
+all_texts.txt
+.idea
+.ipynb_checkpoints/
+data/*
+env/*
