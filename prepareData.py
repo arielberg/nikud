@@ -11,6 +11,7 @@ import csv
 from collections import deque
 import os
 import fasttext
+import utils
 
 charBeforeAndAfter = 4
 
@@ -29,25 +30,27 @@ def trainWordToVec():
 
     '''
 
-    print("WordToVec model exists: {}".format(os.path.isfile(word2VecFiles+".bin")))
+    print("WordToVec model exists: {}".format(os.path.isfile(utils.word2VecFiles+".bin")))
     from gensim.corpora import WikiCorpus
 
     # stop if model already has been created
-    if os.path.isfile(word2VecFiles+".bin"):
+    if os.path.isfile(utils.word2VecFiles+".bin"):
         return
 
     # download from wikipedia
-    if not os.path.isfile(wikiTar):
+    if not os.path.isfile(utils.wikiTar):
         import urllib
         tarLocation = 'https://dumps.wikimedia.org/hewiki/latest/hewiki-latest-pages-articles.xml.bz2'
-        urllib.request.urlretrieve(url, wikiTar)
+        wikiConn = urllib.request.urlopen(tarLocation)
+        with open( utils.wikiTar, 'wb') as wikiSaver:
+            wikiSaver.write(wikiConn.read())
 
     # parse tar file
-    if not os.path.isfile(wikiFull):
+    if not os.path.isfile(utils.wikiFull):
         i = 0
 
-        output = open(wikiFull, 'w')
-        wiki = WikiCorpus(wikiTar, lemmatize=False, dictionary={})
+        output = open(utils.wikiFull, 'w')
+        wiki = WikiCorpus(utils.wikiTar, lemmatize=False, dictionary={})
         for text in wiki.get_texts():
             article = " ".join([t for t in text])
             output.write("{}\n".format(article))
@@ -57,7 +60,7 @@ def trainWordToVec():
 
         output.close()
     # train word2vec
-    fasttext.skipgram(wikiFull, word2VecFiles)
+    fasttext.skipgram(utils.wikiFull, utils.word2VecFiles)
     print("step 1 - {0} created".format(word2VecFiles))
 
 ###################################
@@ -91,18 +94,12 @@ def cleanRowFiles():
                             content = "\n".join(lines)
                             allTexts.writelines(content)
 
-            '''
-           # np.savetxt("data/foo.csv", X, delimiter=",")
-            # df = pd.DataFrame(X)
-            # csvFile.write(X)
-            # df.to_csv("data/foo.csv")
-            #exit()
-            '''
+
 ###################################
 # Step 3: Get vectors for each char and save it to file
 ###################################
 def createCharVector():
-    with open(charVectorFile, "w") as charVectorWriter:
+    with open(utis.charVectorFile, "w") as charVectorWriter:
         csvCharVectorWriter = csv.writer(charVectorWriter)
         with open(allTextsSingleFile, "r") as allTexts:
             while True:
@@ -217,12 +214,9 @@ def sentenceToLabeledData(sentence):
     return rows
 
 chars = ' אבגדהוזחטיכלמנסעפצקרשתךםןףץ'
-nikud,nikudList, nikudStr = getNikodList()
+nikud,nikudList, nikudStr = utils.getNikodList()
 allTextsSingleFile = 'all_texts.txt'
-charVectorFile = 'charVector.csv'
-wikiTar = "data/hewiki-latest-pages-articles.xml.bz2"
-wikiFull = "data/wiki.he.text"
-word2VecFiles = "model/he.fasttext.model"
+
 word2vec = None
 
 if __name__== "__main__":

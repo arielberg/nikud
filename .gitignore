@@ -1,6 +1,7 @@
-/model/*
+model/*
 all_texts.txt
 .idea
 .ipynb_checkpoints/
+__pycache__/
 data/*
-env/*
+env/
