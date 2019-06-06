@@ -19,7 +19,7 @@ charBeforeAndAfter = 4
 # Step 0: Prepare Word2Vec
 ###################################
 def trainWordToVec():
-    '''
+    """
 
     Will train word2vec from wikipedia text
     make sure that hewiki-latest-pages-articles.xml.bz2 is downloaded to
@@ -28,13 +28,13 @@ def trainWordToVec():
     this function creates word2vec model
     :return:
 
-    '''
+    """
 
-    print("WordToVec model exists: {}".format(os.path.isfile(utils.word2VecFiles+".bin")))
+    print("WordToVec model exists: {}".format(os.path.isfile(utils.word2VecFiles + ".bin")))
     from gensim.corpora import WikiCorpus
 
     # stop if model already has been created
-    if os.path.isfile(utils.word2VecFiles+".bin"):
+    if os.path.isfile(utils.word2VecFiles + ".bin"):
         return
 
     # download from wikipedia
@@ -42,7 +42,7 @@ def trainWordToVec():
         import urllib
         tarLocation = 'https://dumps.wikimedia.org/hewiki/latest/hewiki-latest-pages-articles.xml.bz2'
         wikiConn = urllib.request.urlopen(tarLocation)
-        with open( utils.wikiTar, 'wb') as wikiSaver:
+        with open(utils.wikiTar, 'wb') as wikiSaver:
             wikiSaver.write(wikiConn.read())
 
     # parse tar file
@@ -55,13 +55,14 @@ def trainWordToVec():
             article = " ".join([t for t in text])
             output.write("{}\n".format(article))
             i += 1
-            if (i % 500 == 0):
-                print( "{} items loaded".format(str(i)))
+            if i % 500 == 0:
+                print("{} items loaded".format(str(i)))
 
         output.close()
     # train word2vec
     fasttext.skipgram(utils.wikiFull, utils.word2VecFiles)
     print("step 1 - {0} created".format(word2VecFiles))
+
 
 ###################################
 # Step 1: Clean files
@@ -83,7 +84,7 @@ def cleanRowFiles():
                     if '.txt' in file:
                         with open(path + "/" + file, "r") as f:
                             lines = f.readlines();
-                            lines = [re.sub("[^\." + chars + nikudStr + "]", "",line) for line in lines]
+                            lines = [re.sub("[^\." + chars + nikudStr + "]", "", line) for line in lines]
                             lines = [line for line in lines if next(nikod in line for nikod in nikudList)]
                             content = ".".join(lines)
                             content = re.sub(' +', ' ', content)
@@ -98,8 +99,8 @@ def cleanRowFiles():
 ###################################
 # Step 3: Get vectors for each char and save it to file
 ###################################
-def createCharVector():
-    with open(utis.charVectorFile, "w") as charVectorWriter:
+def createCharsCSV():
+    with open(utils.charVectorFile, "w") as charVectorWriter:
         csvCharVectorWriter = csv.writer(charVectorWriter)
         with open(allTextsSingleFile, "r") as allTexts:
             while True:
@@ -115,7 +116,7 @@ def createCharVector():
 ###################################
 # create labels array (each label is a set of nikuds that should follow latters
 def getNikodList():
-    nikods = {hashlib.md5("".encode()).hexdigest():""}
+    nikods = {hashlib.md5("".encode()).hexdigest(): ""}
     nikudStr = ""
     f = open("nikud.txt", "r")
 
@@ -124,18 +125,15 @@ def getNikodList():
         line = f.readline()
         line = line.strip()
         linep = line.split(':')
-        if(len(linep)==2):
+        if (len(linep) == 2):
             nikods[linep[0]] = linep[1]
-            nikudStr = nikudStr+linep[1]
+            nikudStr = nikudStr + linep[1]
     f.close()
 
     nikodList = list(nikods)
     nikuds = list(nikods.values())
     nikuds.remove('')
-    return nikodList,nikuds, nikudStr
-
-def getWordVector(word, word2vec):
-    return word2vec[word]
+    return nikodList, nikuds, nikudStr
 
 def sentenceToLabeledData(sentence):
     '''
@@ -148,83 +146,136 @@ def sentenceToLabeledData(sentence):
         [2] char after
         [3] current char
         [4] current vowel
-        [5] words Vector
-        [6] Boolean - has previous word
-        [7] Boolean - has following word
-        [8] char location in word
+        [5] current sentence part (3 words)
+        [6] current word
+        [7] char location in word
     '''
-    print(sentence)
     # make sure only one space in the begining of a sentence
     sentence = sentence.strip(" ")
-    words = deque( re.sub("[^" + chars + "]", "", sentence).split(" ") )
-    word2vec = fasttext.load_model('model/wiki.he.fasttext.model.bin')
+    words: deque = deque(re.sub("[^" + chars + "]", "", sentence).split(" "))
 
-    # previousWordVector = getWordVector(words.popleft())
-
-    sentenceWordsWindow = ["","",""]
-    sentenceWordsWindow[1] = words.popleft()
-    if len(words)>0:
-        sentenceWordsWindow[2] = words.popleft()
-    currentWordLen = len(sentenceWordsWindow[1]) -1
+    sentence_words_window = ["", "", ""]
+    sentence_words_window[1] = words.popleft()
+    if len(words) > 0:
+        sentence_words_window[2] = words.popleft()
+    current_word_len = len(sentence_words_window[1]) - 1
     charLocationInWord = -1
-    wordsVector = getWordVector(" ".join(filter(None, sentenceWordsWindow)), word2vec)
+    wordsVector = " ".join(filter(None, sentence_words_window))
 
-    rows = [["", "", "", "", wordsVector, sentenceWordsWindow[0] == "", sentenceWordsWindow[2] == "", 0]]
+    rows = [["", "", "", "", wordsVector, sentence_words_window[0] == "", sentence_words_window[2] == "", 0]]
 
     for charIndex in range(len(sentence)):
         c = sentence[charIndex]
-        if c==" ":
+        if c == " ":
             # update word vectors
-            sentenceWordsWindow[0] = sentenceWordsWindow[1]
-            sentenceWordsWindow[1] = sentenceWordsWindow[2]
-            sentenceWordsWindow[2] = ""
-            if len(words)>0:
-                sentenceWordsWindow[2] = words.popleft()
-                currentWordLen = len(sentenceWordsWindow[1]) - 1
-                wordsVector = getWordVector(" ".join(filter(None, sentenceWordsWindow)), word2vec)
+            sentence_words_window[0] = sentence_words_window[1]
+            sentence_words_window[1] = sentence_words_window[2]
+            sentence_words_window[2] = ""
+            if len(words) > 0:
+                sentence_words_window[2] = words.popleft()
+                current_word_len = len(sentence_words_window[1]) - 1
+                wordsVector = " ".join(filter(None, sentence_words_window))
 
             charLocationInWord = -1
 
-        hash = hashlib.md5(c.encode()).hexdigest()
         if c in chars:
             charLocationInWord += 1
-            rows[len(rows)-1][1] = c
+            rows[len(rows) - 1][1] = c
 
             for charIndex in range(1, charBeforeAndAfter):
-                if len(rows)-charIndex > 0:
-                    rows[len(rows)-charIndex-1][2] = c + rows[len(rows)-charIndex-1][2]
-                    rows[len(rows)-1][3] += rows[len(rows)-charIndex-1][1]
+                if len(rows) - charIndex > 0:
+                    rows[len(rows) - charIndex - 1][2] = c + rows[len(rows) - charIndex - 1][2]
+                    rows[len(rows) - 1][3] += rows[len(rows) - charIndex - 1][1]
 
-            if currentWordLen == 0:
+            if current_word_len == 0:
                 charIndexInWord = 0
             else:
-                charIndexInWord = (charLocationInWord / currentWordLen)
-            rows.append(["", "", "", "", wordsVector, sentenceWordsWindow[0]=="", sentenceWordsWindow[2]=="",charIndexInWord])
+                charIndexInWord = (charLocationInWord / current_word_len)
+            rows.append(["", "", "", "", wordsVector, sentence_words_window[0] == "", sentence_words_window[2] == "",
+                         charIndexInWord])
+        elif c in nikudStr:
+            rows[len(rows) - 2][0] += c
         else:
-            if hash=="68b329da9893e34099c7d8ad5cb9c940":
-                continue
-            if hash=="3389dae361af79b04c9c8e7057f60cc6":
                 print(sentence)
                 print(c)
                 print(ord(c))
                 continue
-            rows[len(rows)-1][0]+=c
 
 
     return rows
 
+
+def create_vectors_csv():
+    word2vec = fasttext.load_model('model/wiki.he.fasttext.model.bin')
+    charDfChunked = pd.read_csv('charVector.csv', chunksize=10000, header=None,
+                                names=['label', 'char', 'pre', 'suf', 'window', 'isStart', 'isEnd', 'weight'])
+
+    with open('charsVectorsWithWordsVector.csv', 'a') as csvFile:
+        batchId = 1
+        for df in charDfChunked:
+            df['label'] = df['label'].apply(lambda s: s if type(s) == str else "")
+            df['pre'] = df['pre'].apply(lambda s: s if type(s) == str else "")
+            df['suf'] = df['suf'].apply(lambda s: s if type(s) == str else "")
+            df['label'] = df['label'].astype(str)
+
+            df['label_hotlist'] = df['label'].apply(
+                lambda s: [(1 if utils.nikudStr[i] in s else 0) for i in range(len(utils.nikudStr))])
+
+            df.reset_index(drop=True, inplace=True)
+
+            df = df.join(pd.DataFrame(np.zeros(shape=(df.shape[0], len(utils.nikudStr))),
+                                      columns=["id" + str(i) for i in range(len(utils.nikudStr))]))
+
+            hotlist_length = utils.charBefore * len(utils.chars) + utils.charAfter * len(utils.chars) + 1
+            df = df.join(pd.DataFrame(np.zeros(shape=(df.shape[0], hotlist_length)),
+                                      columns=[
+                                          "char_" + str(int(i / len(utils.chars))) + "_" + str(i % len(utils.chars)) for
+                                          i in range(hotlist_length)]))
+            for i in range(len(utils.chars)):
+                df['char_0_' + str(i)] = df['char'].apply(lambda s: 1 if s == utils.chars[i] else 0)
+
+            for i in range(utils.charBefore):
+                for c in range(len(utils.chars)):
+                    df['char_' + str(i + 1) + '_' + str(c)] = df['pre'].apply(
+                        lambda s: 1 if len(s) > i and s[i] == utils.chars[c] else 0)
+
+            for i in range(utils.charAfter):
+                for c in range(len(utils.chars)):
+                    df['char_' + str(i + 1 + utils.charBefore) + '_' + str(c)] = df['suf'].apply(
+                        lambda s: 1 if len(s) > i and s[i] == utils.chars[c] else 0)
+
+            df['wordVec'] = df['window'].apply(lambda s: word2vec[s])
+
+            df.index = range(df.shape[0])
+            df = df.join(pd.DataFrame(df['wordVec'].tolist(), columns=["c" + str(i) for i in range(100)]))
+
+            del df['wordVec']
+            del df['window']
+            del df['char']
+            del df['pre']
+            del df['suf']
+            del df['label']
+
+            df.to_csv(csvFile, index=False, header=None)
+            print('preparing vectors: bach {} is done'.format(batchId))
+            batchId = batchId + 1
+
+
 chars = ' אבגדהוזחטיכלמנסעפצקרשתךםןףץ'
-nikud,nikudList, nikudStr = utils.getNikodList()
+nikud, nikudList, nikudStr = utils.getNikodList()
 allTextsSingleFile = 'all_texts.txt'
 
 word2vec = None
 
-if __name__== "__main__":
-  # Step 0: Train word2vec
-  trainWordToVec()
+if __name__ == "__main__":
+    # Step 0: Train word2vec
+    trainWordToVec()
 
-  # Step 1: Clean raw files
-  cleanRowFiles()
+    # Step 1: Clean raw files
+    cleanRowFiles()
 
-  # Step 2: Create char vectore
-  createCharVector()
+    # Step 2: Create char vectore
+    createCharsCSV()
+
+    # Step 3: Create vectors
+    create_vectors_csv()

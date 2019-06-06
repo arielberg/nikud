@@ -59,4 +59,6 @@ model_locaion = 'model/'
 model_locaion = next((arg.replace('--MODEL_PATH=','') for arg in sys.argv if 'MODEL_PATH' in arg),model_locaion)
 
 word2VecFiles = model_locaion+"/he.fasttext.model"
+
+vector_CSV_file = 'play.csv' #'charsVectorsWithWordsVector.csv'
 print(word2VecFiles)

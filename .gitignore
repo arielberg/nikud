@@ -5,3 +5,6 @@ all_texts.txt
 __pycache__/
 data/*
 env/
+tmp
+*.csv
+
