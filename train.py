@@ -103,7 +103,6 @@ def do_train():
                 batch_size=1)
             classifier.train(input_fn=train_input_fn)
 
-    exit()
     my_feature_columns = []
     for key in CSV_COLUMNS_TRAIN:
         if key != "labels" and "ignore" not in key:
