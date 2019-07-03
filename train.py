@@ -5,83 +5,84 @@ from tensorflow import feature_column
 import pandas as pd
 import utils
 import fasttext
+from keras.models import Model, Sequential
+from keras.layers import Input, Dense
+from keras.callbacks import EarlyStopping
 
 np.set_printoptions(linewidth=460)
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
-def _model_fn(features, labels, mode, config):
-
-  """Call the defined shared dnn_model_fn."""
-  return _dnn_model_fn(
-          features=features,
-          labels=labels,
-          mode=mode,
-          head=head,
-          hidden_units=hidden_units,
-          feature_columns=tuple(feature_columns or []),
-          optimizer=optimizer,
-          activation_fn=activation_fn,
-          dropout=dropout,
-          input_layer_partitioner=input_layer_partitioner,
-          config=config,
-          batch_norm=batch_norm)
-
-
-
 
 def do_train():
+    " Train Model "
+
+    # Load Word to Vector model
     word2vec = fasttext.load_model('model/wiki.he.fasttext.model.bin')
-
-    DS = pd.read_csv(utils.charVectorFile, header=None, names=CSV_COLUMNS_TRAIN)
-    '''
-    DS = tf.data.experimental.make_csv_dataset(utils.charVectorFile, 100,
-                                                header=False,
-                                                select_columns= ['labels','word_is_beginig', 'word_is_ending','char_place_in_word'],
-                                                label_name='labels',
-                                                na_value="?",
-                                                column_names=CSV_COLUMNS_TRAIN)
-                                                '''
-    DS['labels'] = DS['labels'].apply(lambda chars: chars if type(chars) is str else '')
-   # DS['label_hotlist'] = DS['labels'].apply(lambda chars: [(1 if utils.nikudList[idx] in list(chars) else 0) for idx in range(len(utils.nikudList))])
-    for idx in range(len(utils.nikudList)):
-        DS['label_'+str(idx)] = DS['labels'].apply(lambda chars: 1 if utils.nikudList[idx] in list(chars) else 0)
-
-
-    DS['wordVec'] = DS['window'].apply(lambda s: word2vec[s])
-    DS = DS.join(pd.DataFrame(DS['wordVec'].tolist(), columns=["c" + str(i) for i in range(100)]))
-    DS.pop('wordVec')
-
-    for clm in CSV_COLUMNS_TRAIN:
-        if clm not in ['word_is_beginig', 'word_is_ending', 'char_place_in_word']:
-            DS.pop(clm);
-
-    labelDS = DS[['label_'+str(idx) for idx in range(len(utils.nikudList))]]
-
-    inputFnc = tf.estimator.inputs.pandas_input_fn(x=DS, y=labelDS['label_0'], shuffle=True)
 
     features_cols = [feature_column.numeric_column('word_is_beginig'),
                          feature_column.numeric_column('word_is_ending'),
                          feature_column.numeric_column('char_place_in_word')]
     features_cols.extend([feature_column.numeric_column("c" + str(i)) for i in range(100)])
-    print(features_cols)
-    estimator = nikudEstimator(
-        feature_columns= features_cols,
-        n_classes=len(utils.nikudList),
-        model_dir= 'model/tmp',
-        model_fn=model_fn,
-        hidden_units=[1024, 512, 256])
 
+    #create model
+    model = Sequential()
+
+    #add model layers
+    model.add(Dense(100, activation='relu', input_shape=(243,)))
+    model.add(Dense(50, activation='relu'))
+    model.add(Dense(len(utils.nikudList)))
+
+    #compile model using mse as a measure of model performance
+    model.compile(optimizer='adam', loss='mean_squared_error')
+
+    #train model
+    batchSize = 1500
     epochs = 10
+
     for epochId in range(0, epochs):
-        batchId = 0
 
+        DS = pd.read_csv(utils.charVectorFile, chunksize=100000, header=None, names=CSV_COLUMNS_TRAIN)
+        DS = DS.sample(frac=1)
+        for chunk in DS:
+            chunk['labels'] = chunk['labels'].apply(lambda chars: chars if type(chars) is str else '')
+            chunk['prefix'] = chunk['prefix'].apply(lambda chars: chars if type(chars) is str else '')
+            chunk['suffix'] = chunk['suffix'].apply(lambda chars: chars if type(chars) is str else '')
 
-        batchId +=1
-        print("**********************************")
-        print("Epoch: "+str(epochId)+" Batch: "+str(batchId))
-        print("**********************************")
-        estimator.train(input_fn=inputFnc)
+            chrIndex = 0;
+            for c in utils.chars:
+                chunk['current_char_is_'+str(chrIndex)] = chunk['labels'].apply(lambda chars: 1 if type(chars) is c else 0)
+                for i in range(4):
+                    chunk['current_before_'+str(i)+'_is_' + str(chrIndex)] = chunk['prefix'].apply(lambda pref: 1 if len(pref)>i and pref[i] is c else 0)
+                    chunk['current_before_'+str(i)+'_is_' + str(chrIndex)] = chunk['suffix'].apply(lambda suff: 1 if len(suff)>i and suff[i] is c else 0)
+                chrIndex=chrIndex+1
+
+            # DS['label_hotlist'] = DS['labels'].apply(lambda chars: [(1 if utils.nikudList[idx] in list(chars) else 0) for idx in range(len(utils.nikudList))])
+
+            chunk['wordVec'] = chunk['window'].apply(lambda s: word2vec[s])
+            wordVec = pd.DataFrame(chunk['wordVec'].tolist(), index= chunk.index, columns=["c" + str(i) for i in range(100)])
+
+            chunk = chunk.join(wordVec)
+
+            chunk.pop('wordVec')
+
+            for idx in range(len(utils.nikudList)):
+                chunk['label_' + str(idx)] = chunk['labels'].apply(
+                    lambda chars: 1 if utils.nikudList[idx] in list(chars) else 0)
+
+            for clm in CSV_COLUMNS_TRAIN:
+                if clm not in ['word_is_beginig', 'word_is_ending', 'char_place_in_word']:
+                    chunk.pop(clm);
+
+            #Y = chunk[['label_' + str(idx) for idx in range(len(utils.nikudList))]]
+            X = np.asarray(chunk.loc[:, :'c99'])
+            Y = np.asarray(chunk.loc[:, 'label_0':])
+
+           #  X = tf.convert_to_tensor(X)
+           # Y = np.reshape(Y, (len(Y), len(utils.nikudList)))
+
+            model.fit(X, Y)
+        model.save_weights("weights/tmp/model_100X50_B_"+str(epochId)+".h5")
 
 def getNikuds():
     '''

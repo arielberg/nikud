@@ -39,7 +39,7 @@ charAfter = 4
 chars = ' אבגדהוזחטיכלמנסעפצקרשתךםןףץ'
 
 allTextsSingleFile = 'full_all_texts.txt'
-charVectorFile = 'charVector.csv'
+charVectorFile = 'charVector_full.csv'
 
 wikiTar = "/hewiki-latest-pages-articles.xml.bz2"
 wikiFull = "/wiki.he.text"
