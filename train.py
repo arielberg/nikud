@@ -29,7 +29,8 @@ def do_train():
     model = Sequential()
 
     #add model layers
-    model.add(Dense(100, activation='relu', input_shape=(243,)))
+    model.add(Dense(150, activation='relu', input_shape=(355,)))
+    model.add(Dense(100, activation='relu'))
     model.add(Dense(50, activation='relu'))
     model.add(Dense(len(utils.nikudList)))
 
@@ -41,20 +42,25 @@ def do_train():
     epochs = 10
 
     for epochId in range(0, epochs):
-
+        print("*****************************************")
+        print("****        Epoch   "+str(epochId)+"      ********")
+        print("*****************************************")
         DS = pd.read_csv(utils.charVectorFile, chunksize=100000, header=None, names=CSV_COLUMNS_TRAIN)
-        DS = DS.sample(frac=1)
+
         for chunk in DS:
             chunk['labels'] = chunk['labels'].apply(lambda chars: chars if type(chars) is str else '')
             chunk['prefix'] = chunk['prefix'].apply(lambda chars: chars if type(chars) is str else '')
             chunk['suffix'] = chunk['suffix'].apply(lambda chars: chars if type(chars) is str else '')
+
+            # shuffle
+            chunk = chunk.sample(frac=1)
 
             chrIndex = 0;
             for c in utils.chars:
                 chunk['current_char_is_'+str(chrIndex)] = chunk['labels'].apply(lambda chars: 1 if type(chars) is c else 0)
                 for i in range(4):
                     chunk['current_before_'+str(i)+'_is_' + str(chrIndex)] = chunk['prefix'].apply(lambda pref: 1 if len(pref)>i and pref[i] is c else 0)
-                    chunk['current_before_'+str(i)+'_is_' + str(chrIndex)] = chunk['suffix'].apply(lambda suff: 1 if len(suff)>i and suff[i] is c else 0)
+                    chunk['current_after_'+str(i)+'_is_' + str(chrIndex)] = chunk['suffix'].apply(lambda suff: 1 if len(suff)>i and suff[i] is c else 0)
                 chrIndex=chrIndex+1
 
             # DS['label_hotlist'] = DS['labels'].apply(lambda chars: [(1 if utils.nikudList[idx] in list(chars) else 0) for idx in range(len(utils.nikudList))])
@@ -82,7 +88,7 @@ def do_train():
            # Y = np.reshape(Y, (len(Y), len(utils.nikudList)))
 
             model.fit(X, Y)
-        model.save_weights("weights/tmp/model_100X50_B_"+str(epochId)+".h5")
+            model.save_weights("model/tmp/model_100X50_B_"+str(epochId)+".h5")
 
 def getNikuds():
     '''
