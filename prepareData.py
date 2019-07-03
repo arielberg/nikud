@@ -12,6 +12,8 @@ from collections import deque
 import os
 import fasttext
 import utils
+import pandas as pd
+import numpy as np
 
 charBeforeAndAfter = 4
 
@@ -210,7 +212,7 @@ def create_vectors_csv():
     charDfChunked = pd.read_csv('charVector.csv', chunksize=10000, header=None,
                                 names=['label', 'char', 'pre', 'suf', 'window', 'isStart', 'isEnd', 'weight'])
 
-    with open('charsVectorsWithWordsVector.csv', 'a') as csvFile:
+    with open('charsVectorsWithWordsVector.csv', 'w') as csvFile:
         batchId = 1
         for df in charDfChunked:
             df['label'] = df['label'].apply(lambda s: s if type(s) == str else "")
@@ -218,31 +220,7 @@ def create_vectors_csv():
             df['suf'] = df['suf'].apply(lambda s: s if type(s) == str else "")
             df['label'] = df['label'].astype(str)
 
-            df['label_hotlist'] = df['label'].apply(
-                lambda s: [(1 if utils.nikudStr[i] in s else 0) for i in range(len(utils.nikudStr))])
-
             df.reset_index(drop=True, inplace=True)
-
-            df = df.join(pd.DataFrame(np.zeros(shape=(df.shape[0], len(utils.nikudStr))),
-                                      columns=["id" + str(i) for i in range(len(utils.nikudStr))]))
-
-            hotlist_length = utils.charBefore * len(utils.chars) + utils.charAfter * len(utils.chars) + 1
-            df = df.join(pd.DataFrame(np.zeros(shape=(df.shape[0], hotlist_length)),
-                                      columns=[
-                                          "char_" + str(int(i / len(utils.chars))) + "_" + str(i % len(utils.chars)) for
-                                          i in range(hotlist_length)]))
-            for i in range(len(utils.chars)):
-                df['char_0_' + str(i)] = df['char'].apply(lambda s: 1 if s == utils.chars[i] else 0)
-
-            for i in range(utils.charBefore):
-                for c in range(len(utils.chars)):
-                    df['char_' + str(i + 1) + '_' + str(c)] = df['pre'].apply(
-                        lambda s: 1 if len(s) > i and s[i] == utils.chars[c] else 0)
-
-            for i in range(utils.charAfter):
-                for c in range(len(utils.chars)):
-                    df['char_' + str(i + 1 + utils.charBefore) + '_' + str(c)] = df['suf'].apply(
-                        lambda s: 1 if len(s) > i and s[i] == utils.chars[c] else 0)
 
             df['wordVec'] = df['window'].apply(lambda s: word2vec[s])
 
@@ -251,10 +229,6 @@ def create_vectors_csv():
 
             del df['wordVec']
             del df['window']
-            del df['char']
-            del df['pre']
-            del df['suf']
-            del df['label']
 
             df.to_csv(csvFile, index=False, header=None)
             print('preparing vectors: bach {} is done'.format(batchId))
@@ -263,7 +237,7 @@ def create_vectors_csv():
 
 chars = ' אבגדהוזחטיכלמנסעפצקרשתךםןףץ'
 nikud, nikudList, nikudStr = utils.getNikodList()
-allTextsSingleFile = 'all_texts.txt'
+allTextsSingleFile = 'full_all_texts.txt'
 
 word2vec = None
 
@@ -278,4 +252,4 @@ if __name__ == "__main__":
     createCharsCSV()
 
     # Step 3: Create vectors
-    create_vectors_csv()
+    # create_vectors_csv()

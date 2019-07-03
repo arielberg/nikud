@@ -1,190 +1,126 @@
 import tensorflow as tf
 import numpy as np
-import apache_beam as beam
-import tensorflow_transform as tft
-import tensorflow_transform.beam.impl as tft_beam
+import hashlib
+from tensorflow import feature_column
+import pandas as pd
 import utils
-import os
-from tensorflow_transform.tf_metadata import dataset_metadata
-from tensorflow_transform.tf_metadata import dataset_schema
+import fasttext
 
 np.set_printoptions(linewidth=460)
 
 tf.logging.set_verbosity(tf.logging.INFO)
-def train_input_fn(dataset):
-    """
-    chunk = chunks.popleft()
-    labels = chunk.pop('labels')
-    """
-    ds = tf.data.Dataset.from_tensor_slices((dict(dataset['word_is_beginig']), dataset['labels']))
+
+def _model_fn(features, labels, mode, config):
+
+  """Call the defined shared dnn_model_fn."""
+  return _dnn_model_fn(
+          features=features,
+          labels=labels,
+          mode=mode,
+          head=head,
+          hidden_units=hidden_units,
+          feature_columns=tuple(feature_columns or []),
+          optimizer=optimizer,
+          activation_fn=activation_fn,
+          dropout=dropout,
+          input_layer_partitioner=input_layer_partitioner,
+          config=config,
+          batch_norm=batch_norm)
 
 
-    return ds.make_one_shot_iterator().get_next()
-
-
-def prepareCSV(*args):
-    return (dict(args), args[3])
-
-def preprocessing_fn(inputs):
-    outputs = inputs.copy()
-    labels = outputs['labels']
-    del outputs['labels']
-    return labels, outputs
-
-def _make_training_input_fn(tf_transform_output, transformed_examples,
-                            batch_size):
-    """Creates an input function reading from transformed data.
-
-    Args:
-    tf_transform_output: Wrapper around output of tf.Transform.
-    transformed_examples: Base filename of examples.
-    batch_size: Batch size.
-
-    Returns:
-    The input function for training or eval.
-    """
-    def input_fn():
-        """Input function for training and eval."""
-        dataset = tf.contrib.data.make_batched_features_dataset(
-            file_pattern=transformed_examples,
-            batch_size=batch_size,
-            features=tf_transform_output.transformed_feature_spec(),
-            reader=tf.data.TFRecordDataset,
-            shuffle=True)
-
-        transformed_features = dataset.make_one_shot_iterator().get_next()
-
-        # Extract features and label from the transformed tensors.
-        transformed_labels = transformed_features.pop(LABEL_KEY)
-
-        return transformed_features, transformed_labels
-
-    return input_fn
 
 
 def do_train():
-    with beam.Pipeline() as pipeline:
-        with tft_beam.Context(temp_dir='tmp'):
-            RAW_DATA_FEATURE_SPEC = dict(
-                [(name, tf.FixedLenFeature([], tf.float32))
-                 for name in CSV_COLUMNS_TRAIN]
-            )
+    word2vec = fasttext.load_model('model/wiki.he.fasttext.model.bin')
 
-            RAW_DATA_METADATA = dataset_metadata.DatasetMetadata(
-                dataset_schema.from_feature_spec(RAW_DATA_FEATURE_SPEC)
-            )
-            converter = tft.coders.CsvCoder(CSV_COLUMNS_TRAIN, RAW_DATA_METADATA.schema)
-
-
-            raw_data = (
-                    pipeline
-                    | 'ReadTrainData' >> beam.io.ReadFromText(utils.vector_CSV_file)
-                    | 'FixCommasTrainData' >> beam.Map(
-                lambda line: line.replace(', ', ','))
-                    | 'DecodeTrainData' >> MapAndFilterErrors(converter.decode))
-
-            my_feature_columns = []
-            for key in CSV_COLUMNS_TRAIN:
-                if key != "labels" and "ignore" not in key:
-                    my_feature_columns.append(tf.feature_column.numeric_column(key=key))
-
-            classifier = tf.estimator.DNNClassifier(
-                feature_columns=my_feature_columns,
-                # Three hidden layers of 10 nodes.
-                hidden_units=[50, 50],
-                # The model must choose between 2 classes.
-                n_classes=len(utils.nikudStr) + 1)
-
-            tf_transform_output = tft.TFTransformOutput('tmp')
-
-            train_input_fn = _make_training_input_fn(
-                tf_transform_output,
-                os.path.join('tmp', 'train_transformed' + '*'),
-                batch_size=1)
-            classifier.train(input_fn=train_input_fn)
-
-    my_feature_columns = []
-    for key in CSV_COLUMNS_TRAIN:
-        if key != "labels" and "ignore" not in key:
-            my_feature_columns.append(tf.feature_column.numeric_column(key=key))
-
-    dataset = tf.data.experimental.CsvDataset(utils.vector_CSV_file,
-                                        [tf.float32  for i in range(len(my_feature_columns))],
-                                        header=True, buffer_size=1)
-
-    with tft_beam.Context(temp_dir='tmp'):
-        transformed_dataset, transform_fn = (
-                dataset | tft_beam.AnalyzeAndTransformDataset(
-                    preprocessing_fn))
-
-    # dataset.map(prepareCSV)
-    dataset.shuffle(1000)
-
-    """
-    df = pd.read_csv(utils.vector_CSV_file, names=CSV_COLUMNS_TRAIN, header=None, chunksize=1000)
-    from collections import deque
-    df_que = deque(df)
-
-    """
-    # Build 2 hidden layer DNN with 10, 10 units respectively.
-    classifier = tf.estimator.DNNClassifier(
-        feature_columns=my_feature_columns,
-        # Three hidden layers of 10 nodes.
-        hidden_units=[50, 50],
-        # The model must choose between 2 classes.
-        n_classes=len(utils.nikudStr)+1)
-
-    classifier.train(input_fn=lambda: train_input_fn(dataset))
-
-    model.save_weights("weights/model_100X50_B_"+str(epochId)+".h5")
+    DS = pd.read_csv(utils.charVectorFile, header=None, names=CSV_COLUMNS_TRAIN)
+    '''
+    DS = tf.data.experimental.make_csv_dataset(utils.charVectorFile, 100,
+                                                header=False,
+                                                select_columns= ['labels','word_is_beginig', 'word_is_ending','char_place_in_word'],
+                                                label_name='labels',
+                                                na_value="?",
+                                                column_names=CSV_COLUMNS_TRAIN)
+                                                '''
+    DS['labels'] = DS['labels'].apply(lambda chars: chars if type(chars) is str else '')
+   # DS['label_hotlist'] = DS['labels'].apply(lambda chars: [(1 if utils.nikudList[idx] in list(chars) else 0) for idx in range(len(utils.nikudList))])
+    for idx in range(len(utils.nikudList)):
+        DS['label_'+str(idx)] = DS['labels'].apply(lambda chars: 1 if utils.nikudList[idx] in list(chars) else 0)
 
 
-CSV_COLUMNS_TRAIN = ['word_is_beginig',
-                     'word_is_ending',
-                     'char_place_in_word',
-                     'labels']
+    DS['wordVec'] = DS['window'].apply(lambda s: word2vec[s])
+    DS = DS.join(pd.DataFrame(DS['wordVec'].tolist(), columns=["c" + str(i) for i in range(100)]))
+    DS.pop('wordVec')
 
-""" TODO : Remove ID Coulmns """
-for i in range(len(utils.nikudStr)):
-    CSV_COLUMNS_TRAIN.append("ignore_"+str(i))
+    for clm in CSV_COLUMNS_TRAIN:
+        if clm not in ['word_is_beginig', 'word_is_ending', 'char_place_in_word']:
+            DS.pop(clm);
 
-for i in range(len(utils.chars)):
-    CSV_COLUMNS_TRAIN.append("char_is_"+str(i))
-for n in range(utils.charBefore):
-    for i in range(len(utils.chars)):
-        CSV_COLUMNS_TRAIN.append("before_"+str(n+1)+"_is_"+str(i))
-for n in range(utils.charAfter):
-    for i in range(len(utils.chars)):
-        CSV_COLUMNS_TRAIN.append("after_"+str(n+1)+"_is_"+str(i))
+    labelDS = DS[['label_'+str(idx) for idx in range(len(utils.nikudList))]]
+
+    inputFnc = tf.estimator.inputs.pandas_input_fn(x=DS, y=labelDS['label_0'], shuffle=True)
+
+    features_cols = [feature_column.numeric_column('word_is_beginig'),
+                         feature_column.numeric_column('word_is_ending'),
+                         feature_column.numeric_column('char_place_in_word')]
+    features_cols.extend([feature_column.numeric_column("c" + str(i)) for i in range(100)])
+    print(features_cols)
+    estimator = nikudEstimator(
+        feature_columns= features_cols,
+        n_classes=len(utils.nikudList),
+        model_dir= 'model/tmp',
+        model_fn=model_fn,
+        hidden_units=[1024, 512, 256])
+
+    epochs = 10
+    for epochId in range(0, epochs):
+        batchId = 0
+
+
+        batchId +=1
+        print("**********************************")
+        print("Epoch: "+str(epochId)+" Batch: "+str(batchId))
+        print("**********************************")
+        estimator.train(input_fn=inputFnc)
+
+def getNikuds():
+    '''
+    Helper function to get all forms of nikud list and dictionaries
+
+    TODO: Clean and move to Utility
+    :return:
+    '''
+    # create labels array (each label is a set of nikuds that should follow latters
+    nikods = {hashlib.md5("".encode()).hexdigest(): ""}
+    f = open("nikud.txt", "r")
+
+    line = f.readline()
+    while line:
+        line = f.readline()
+        line = line.strip()
+        linep = line.split(':')
+        if (len(linep) == 2):
+            nikods[linep[0]] = linep[1]
+    f.close()
+
+    nikodList = list(nikods)
+    return nikodList, nikods
+
+CSV_COLUMNS_TRAIN = [   'labels',
+                        'char',
+                        'prefix',
+                        'suffix',
+                        'window',
+                        'word_is_beginig',
+                        'word_is_ending',
+                        'char_place_in_word',
+                     ]
+'''
 for i in range(100):
     CSV_COLUMNS_TRAIN.append("word_to_vec_"+str(i))
-
+'''
 chunkID = -1
 chunkedDS = None
-
-class MapAndFilterErrors(beam.PTransform):
-    """Like beam.Map but filters out erros in the map_fn."""
-
-    class _MapAndFilterErrorsDoFn(beam.DoFn):
-        """Count the bad examples using a beam metric."""
-
-        def __init__(self, fn):
-            self._fn = fn
-            # Create a counter to measure number of bad elements.
-            self._bad_elements_counter = beam.metrics.Metrics.counter('rel_example', 'bad_elements')
-
-    def process(self, element):
-        try:
-            yield self._fn(element)
-        except Exception:  # pylint: disable=broad-except
-            # Catch any exception the above call.
-            self._bad_elements_counter.inc(1)
-
-    def __init__(self, fn):
-        self._fn = fn
-
-    def expand(self, pcoll):
-        return pcoll | beam.ParDo(self._MapAndFilterErrorsDoFn(self._fn))
 
 if __name__== "__main__":
     do_train()

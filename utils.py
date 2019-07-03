@@ -38,7 +38,7 @@ charAfter = 4
 # all valid chars & space
 chars = ' אבגדהוזחטיכלמנסעפצקרשתךםןףץ'
 
-allTextsSingleFile = 'all_texts.txt'
+allTextsSingleFile = 'full_all_texts.txt'
 charVectorFile = 'charVector.csv'
 
 wikiTar = "/hewiki-latest-pages-articles.xml.bz2"
@@ -60,5 +60,5 @@ model_locaion = next((arg.replace('--MODEL_PATH=','') for arg in sys.argv if 'MO
 
 word2VecFiles = model_locaion+"/he.fasttext.model"
 
-vector_CSV_file = 'play.csv' #'charsVectorsWithWordsVector.csv'
+vector_CSV_file = 'charsVectorsWithWordsVector.csv'
 print(word2VecFiles)
