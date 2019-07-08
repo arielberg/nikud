@@ -1,5 +1,5 @@
 import hashlib
-
+import unicodedata
 import sys
 
 
@@ -61,4 +61,13 @@ model_locaion = next((arg.replace('--MODEL_PATH=','') for arg in sys.argv if 'MO
 word2VecFiles = model_locaion+"/he.fasttext.model"
 
 vector_CSV_file = 'charsVectorsWithWordsVector.csv'
-print(word2VecFiles)
+
+vowels_category = {
+    "a": ["QAMATS", "PATAH", "HATAF PATAH", "HATAF QAMATS"],
+    "s": ["SHEVA"],
+    "e": ["HATAF SEGOL", "TSERE", "SEGOL"],
+    "o": ["QUBUTS"],
+    "u": ["HOLAM", "HOLAM HASER FOR VAV"],
+    "i": ["HIRIQ"]
+}
+vowels_category_map = {ord(unicodedata.lookup("HEBREW POINT "+nikud_name)):category_key for category_key in vowels_category for nikud_name in vowels_category[category_key]}

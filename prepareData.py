@@ -13,7 +13,7 @@ import os
 import fasttext
 import utils
 import pandas as pd
-import numpy as np
+from unicodedata import *
 
 charBeforeAndAfter = 4
 
@@ -168,7 +168,11 @@ def sentenceToLabeledData(sentence):
 
     for charIndex in range(len(sentence)):
         c = sentence[charIndex]
-        if c == " ":
+        if ord(c)==10:
+            continue
+        c_name = name(c)
+
+        if c_name == "SPACE":
             # update word vectors
             sentence_words_window[0] = sentence_words_window[1]
             sentence_words_window[1] = sentence_words_window[2]
@@ -186,7 +190,7 @@ def sentenceToLabeledData(sentence):
 
             for charIndex in range(1, charBeforeAndAfter):
                 if len(rows) - charIndex > 0:
-                    rows[len(rows) - charIndex - 1][2] = c + rows[len(rows) - charIndex - 1][2]
+                    rows[len(rows) - charIndex - 1][2] = rows[len(rows) - charIndex - 1][2] + c
                     rows[len(rows) - 1][3] += rows[len(rows) - charIndex - 1][1]
 
             if current_word_len == 0:
@@ -195,13 +199,13 @@ def sentenceToLabeledData(sentence):
                 charIndexInWord = (charLocationInWord / current_word_len)
             rows.append(["", "", "", "", wordsVector, sentence_words_window[0] == "", sentence_words_window[2] == "",
                          charIndexInWord])
-        elif c in nikudStr:
+        elif "HEBREW POINT " in name(c):
             rows[len(rows) - 2][0] += c
         else:
-                print(sentence)
-                print(c)
-                print(ord(c))
-                continue
+            print(sentence)
+            print(c)
+            print(ord(c))
+            continue
 
 
     return rows
